@@ -5,7 +5,8 @@
 This project implements supervised machine learning on large-scale graph data using the MUTAG dataset. It includes multiple graph classification frameworks comparing classic machine learning with Graph Neural Networks.
 
 **Key Features:**
-- **MPS Support**: Optimized for Apple Silicon (M1/M2/M3) MacBooks
+- **MPS Support**: Optimized for Apple Silicon M4 MacBooks
+- **Graph Mining** Subgraph Mining Pipeline implemented 
 - **Cross-Validation**: 5-fold stratified cross-validation for reliable evaluation
 - **Imbalanced Data Handling**: Multiple strategies for handling class imbalance
 - **Comprehensive Metrics**: Balanced accuracy, MCC, macro-F1, and more
@@ -17,7 +18,7 @@ The project automatically detects and uses the best available hardware:
 2. **MPS** (Apple Silicon - M4 pro MacBooks)
 3. **CPU** (fallback)
 
-For our case, we run the experiment on M4 pro MacBooks
+For our case, we run the experiment on M4 Pro MacBooks.
 
 ```python
 # Device is automatically selected
