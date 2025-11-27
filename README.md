@@ -291,7 +291,3 @@ cv_results = cross_validate_all_classic_ml(X, y, n_folds=5)
 - Rajni Hiroshima
 - Rahubadde De Silva
 - Cadence Litteral
-
-## License
-
-MIT License
