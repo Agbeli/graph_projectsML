@@ -1,0 +1,28 @@
+
+COMPARISON: GNN EXPLANATIONS vs CLASSIC ML INTERPRETABILITY
+
+1. GNNExplainer (Post-hoc, Local)
+   - Provides instance-level explanations
+   - Identifies important edges/nodes for each prediction
+   - Fidelity metrics measure faithfulness to model behavior
+   - Runtime per explanation: ~6.476s
+   - Pros: Works with any GNN architecture, provides visual explanations
+   - Cons: Computationally expensive, explanations may vary
+
+2. Classic ML with Frequent Subgraphs (Self-Explainable, Global)
+   - Feature importance directly from model (e.g., Random Forest)
+   - Subgraph patterns provide semantic meaning
+   - Global interpretation: same features for all predictions
+   - Pros: Fast, consistent, chemically meaningful patterns
+   - Cons: Limited expressiveness, requires feature engineering
+
+3. Key Differences:
+   - Scope: GNNExplainer=local (per-graph), Classic ML=global (dataset-level)
+   - Granularity: GNNExplainer=node/edge level, Classic ML=subgraph level
+   - Computation: GNNExplainer=expensive, Classic ML=cheap (after training)
+   - Interpretability: Classic ML more intuitive for domain experts
+
+4. Recommendations:
+   - For debugging: Use GNNExplainer to understand individual predictions
+   - For domain insights: Use Classic ML feature importance
+   - For deployment: Consider hybrid approach with interpretable GNNs

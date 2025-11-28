@@ -1,0 +1,3 @@
+Approach,Mining Time,Feature Extraction,Model Training (avg),Total Preprocessing
+Classic ML,0.015392065048217773,0.585050106048584,0.03425161043802897,0.6004421710968018
+GNN,0.0,0.0,74.33013516664505,0.0
