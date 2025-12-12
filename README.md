@@ -31,8 +31,8 @@ print(f"Using: {device}")  # e.g., "mps" on MacBook Pro
 **MUTAG Dataset**: A standard benchmark for graph classification containing 188 small molecular graphs representing chemical compounds. Each graph is labeled as mutagenic (1) or non-mutagenic (0).
 
 - **Number of graphs**: 188
-- **Average nodes**: ~18 per graph
-- **Average edges**: ~20 per graph
+- **Average nodes**: 17.93 $\pm$ 4.58 per graph
+- **Average edges**: 39.59 $\pm$ 11.37 per graph
 - **Task**: Binary classification (mutagenic vs non-mutagenic)
 
 ## Project Structure
@@ -150,7 +150,7 @@ cv_results = cross_validate_all_classic_ml(X, y, n_folds=5)
 - Class weighting (balanced weights)
 - SMOTE oversampling
 - Random undersampling
-- SMOTEENN (hybrid approach)
+
 
 ### Q2: Graph Neural Networks
 
