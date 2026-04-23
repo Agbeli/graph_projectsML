@@ -1,0 +1,564 @@
+---
+title: "STAT 6440: Data Mining: Group 8"
+author: "Final source code"
+subtitle: "Group Assignment 3"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+source("myfunctions.R")
+library(caret)
+library(car)
+library(FNN)
+library(rpart)
+library(rpart.plot)
+library(gains)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(corrplot)
+library(skimr)
+library(ggcorrplot)
+library(fastAdaboost)
+```
+
+
+
+### Exploratory Analysis
+
+
+In the part of our we want to explore the dataset and understand the represenatation of each features. 
+
+
+```{r,echo=TRUE}
+# load the dataset
+dataLifeExpectancy <- read.csv("Life-Expectancy-Data-Updated.csv")
+str(dataLifeExpectancy)
+print(dim(dataLifeExpectancy))
+```
+
+\textbf{Data characteristics}
+
+In we want to understand the information each feature in the data set and capture missing information in data. From the data, we observed the data was cleaned and there were no missing values. The total number of observation collected are 2864 and 21 individual features including the response variable. 
+
+```{r,echo=TRUE}
+colSums(is.na(dataLifeExpectancy))
+
+head(dataLifeExpectancy)
+```
+
+- This data were collected from various continents in the world showing the occurence of death. The table shows the number of observations collected from each continent. From the data we observed that majority of observations were collected from Africa representing 816 and least collected is North America with an amount of 48. 
+
+```{r,echo=TRUE}
+table(dataLifeExpectancy$Region)
+
+# extract the features of interest 
+life_expectancy_num_vars <- dataLifeExpectancy %>% 
+  select(where(is.numeric)) %>%
+  select(-Year)
+```
+
+- We want to have the summary statistic of country and their life expectancy. Extracted few of the features to under summary information under each continents using ; mortality information both infants and adult. 
+
+From the data we observed that Africa has the lowest median life expectancy among all the continent with a value of $57.05$ follow by Oceania and Asia.  
+
+- Interestingly, Africa has highest infants mortality follow by the Asia continent
+
+- We only have to two categorical features ; Economy_status_Developed and Economy_status_Developing. This was generated based the Status from the original datasets. 
+
+```{r,echo=TRUE}
+summary(life_expectancy_num_vars)
+```
+
+
+
+
+
+- Distribution of each numeric features. We wanted to understand the skewness of the distribution under each feature of the dataset. We observed that most of the features are righted and lefted skewed in nature 
+
+```{r,echo=TRUE}
+# extract the features of interest 
+num_vars <- dataLifeExpectancy %>% 
+  select(where(is.numeric)) %>%
+  select(-Year)
+
+# All histograms at once
+num_vars %>%
+  pivot_longer(everything(), names_to = "Variable", values_to = "Value") %>%
+  ggplot(aes(x = Value)) +
+  geom_histogram(bins = 25, fill = "steelblue", color = "white", alpha = 0.7) +
+  facet_wrap(~ Variable, scales = "free", ncol = 4) +
+  labs(title = "Distributions of All Numeric Features") +
+  theme_minimal(base_size = 9)
+```
+
+
+In this part of our analysis, we want to understand the distribution of the life expectancy by region. We observed some level of outlying points for some of the features using box and whiskey plot. 
+
+
+```{r,echo=TRUE}
+# 
+ggplot(dataLifeExpectancy, aes(x = Region, y = Life_expectancy, fill = Region)) +
+  geom_boxplot(outlier.colour = "red", outlier.shape = 16, alpha = 0.7) +
+  stat_summary(fun = mean, geom = "point", shape = 23,
+               size = 3, fill = "white", color = "black") +  # mean diamond
+  labs(
+    title    = "Distribution of Life Expectancy by Region",
+    x        = "Region",
+    y        = "Life Expectancy",
+    fill     = "Region"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 0.5)) +
+  theme(legend.position = "none")
+
+```
+
+- Individual distribution without considering the region. 
+
+```{r,echo=TRUE}
+num_vars %>%
+  pivot_longer(everything(), names_to = "Variable", values_to = "Value") %>%
+  ggplot(aes(x = Variable, y = Value)) +
+  geom_boxplot(fill = "steelblue", outlier.colour = "red",
+               outlier.size = 1, alpha = 0.7) +
+  facet_wrap(~ Variable, scales = "free", ncol = 4) +
+  labs(title = "Outlier Detection Across Numeric Variables") +
+  theme_minimal(base_size = 8) +
+  theme(axis.text.x = element_blank())
+```
+
+- This is trend of average life expectancy over the years combining all information from the regions. We wanted to group by the years and under the trends of life expectancy over years. We observed that there is an increase in life expectancy over years combined information. 
+
+
+```{r,echo=TRUE}
+dataLifeExpectancy %>%
+  group_by(Year) %>%
+  summarise(mean_le = mean(Life_expectancy, na.rm = TRUE)) %>%
+  ggplot(aes(x = Year, y = mean_le)) +
+  geom_line(color = "steelblue", linewidth = 1.2) +
+  geom_point(size = 2) +
+  labs(title = "Average Life Expectancy Over Time",
+       x = "Year", y = "Mean Life Expectancy") +
+  theme_minimal()
+```
+
+
+```{r,echo=TRUE}
+# extract the numeric information 
+num_vars <- dataLifeExpectancy %>% 
+  select(where(is.numeric)) %>%
+  select(-Year)
+
+cor_matrix <- cor(num_vars, use = "pairwise.complete.obs")
+
+# Correlation with target only
+cor_with_target <- sort(cor_matrix[, "Life_expectancy"], decreasing = TRUE)
+print(cor_with_target)
+
+# Full heatmap
+ggcorrplot(round(cor_matrix,1),
+           method = "square",
+           type   = "upper",
+           lab    = TRUE,
+           show.diag = TRUE,
+           lab_size = 1.9,
+           colors = c("#d73027", "white", "#1a9850"),
+           title  = "Correlation Matrix") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, size = 7),
+        axis.text.y = element_text(size = 7))
+```
+
+```{r,echo=TRUE}
+library(kableExtra)
+
+cor_df <- as.data.frame(round(cor_matrix, 2))
+
+cor_df %>%
+  kbl(caption = "Correlation Matrix — WHO Life Expectancy") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"),
+                full_width = TRUE, font_size = 11) %>%
+  column_spec(1, bold = TRUE) %>%
+  row_spec(0, bold = TRUE, background = "#f5f5f5")
+```
+
+
+From the datasets, we observation the features were cleaned without missing values. 
+
+### Ensemble models implementation 
+
+In this session, we will extract all the numeric information and after we will split the data into train and test. We will fit with the train set and assess the performance of the best model selected. 
+
+```{r,echo=TRUE}
+# setting a seed 
+RNGkind (sample.kind = "Rounding") 
+set.seed(0) # set a seed 
+p2_Expectancy <- partition.2(num_vars, 0.8)
+training_dataExpectancy <- p2_Expectancy$data.train
+test_dataExpectancy <- p2_Expectancy$data.test
+
+cat("Dimension of the train set: ", dim(training_dataExpectancy),"\n")
+cat("Dimension of the test set: ",dim(test_dataExpectancy))
+```
+
+We will implement the model implementation pipeline. 
+
+```{r,echo=TRUE}
+# set the cross-validation
+ctrl <- trainControl(
+  method    = "cv",
+  number    = 5,          # 5-fold CV
+  verboseIter = FALSE,
+  allowParallel = TRUE
+)
+```
+
+#### Bagging 
+
+In this case, we perform 5-folds cross-validation 
+
+```{r,echo=TRUE}
+# time the bagging 
+time_bag <- system.time({
+  set.seed(123)
+  model_bag <- train(
+    Life_expectancy ~ .,
+    data      = training_dataExpectancy,
+    method    = "treebag",
+    trControl = ctrl,
+    nbagg     = 50
+  )
+})
+
+cat("Bagging done\n")
+print(model_bag)
+print(time_bag)
+```
+
+
+
+#### Random Forest 
+
+
+```{r,echo=TRUE}
+time_rf <- system.time({
+set.seed(123)
+model_rf <- train(
+  Life_expectancy ~ .,
+  data      = training_dataExpectancy,
+  method    = "rf",
+  trControl = ctrl,
+  tuneGrid  = expand.grid(mtry = c(3, 5, 7, 9)),
+  ntree     = 500,
+  importance = TRUE
+)})
+
+cat("Random Forest done\n")
+print(model_rf)
+plot(model_rf, main = "RF — mtry tuning")
+print(time_rf)
+```
+
+
+#### Adaboost 
+
+We had to perform hyperparameter tuning for number of boosting interactions, max tree depth and learning rate. 
+
+```{r,echo=TRUE}
+# AdaBoost in caret uses method = "adaboost"
+# Requires: install.packages("fastAdaboost")
+tuneGrid <- expand.grid(
+    n.trees  = c(50, 100, 150),   # Number of boosting iterations
+    interaction.depth = c(1, 2, 3), # Max tree depth (1 = stumps)
+    shrinkage = c(0.1,0.2) ,# Learning rate (smaller = slower but more robust)
+    n.minobsinnode    = c(10, 20)
+  )
+
+time_ada <- system.time({
+set.seed(123)
+modelLookup("gbm")
+model_ada <- train(
+  Life_expectancy ~ .,
+  data      = training_dataExpectancy,
+  method    = "gbm",
+  trControl = ctrl,
+  tuneGrid  = tuneGrid,
+  verbose   = FALSE
+)})
+
+cat("AdaBoost done\n")
+print(model_ada)
+print(time_ada)
+
+```
+
+#### Stacking algorithms 
+
+In we perform ensemble in different way other than the standard approach where we consider three different weaks models :
+
+- Lasso 
+- Ridge 
+- Knn model 
+
+We wanted to combine two shrinkage algorithms to assess how these model perform compare to tree ensemble. 
+
+
+
+```{r,echo=TRUE}
+
+# ----- tree regression ------
+time_tree <- system.time({
+  tune_tree <- train(
+  Life_expectancy ~ .,
+  data      = training_dataExpectancy,
+  method    = "rpart",
+  trControl = ctrl,
+  tuneGrid  = expand.grid(cp = c(0.001, 0.005, 0.01, 0.05, 0.1))
+)
+})
+# ---- Ridge ----
+time_ridge <- system.time({
+  set.seed(123)
+  model_ridge <- train(
+    Life_expectancy ~ .,
+    data      = training_dataExpectancy,
+    method    = "glmnet",
+    trControl = ctrl,
+    tuneGrid  = expand.grid(alpha = 0, lambda = 10^seq(-4, 2, length = 50)),
+    preProcess = c("center", "scale")
+  )
+})
+
+# ---- Lasso ----
+time_lasso <- system.time({
+  set.seed(123)
+  model_lasso <- train(
+    Life_expectancy ~ .,
+    data      = training_dataExpectancy,
+    method    = "glmnet",
+    trControl = ctrl,
+    tuneGrid  = expand.grid(alpha = 1, lambda = 10^seq(-4, 2, length = 50)),
+    preProcess = c("center", "scale")
+  )
+})
+
+# ---- KNN ----
+time_knn <- system.time({
+  set.seed(123)
+  model_knn <- train(
+    Life_expectancy ~ .,
+    data      = training_dataExpectancy,
+    method    = "knn",
+    trControl = ctrl,
+    tuneGrid  = expand.grid(k = c(3, 5, 7, 9, 11, 15)),
+    preProcess = c("center", "scale")
+  )
+})
+
+
+
+# 
+
+# ---- Stack meta-learner ----
+time_stack <- system.time({
+  pred_ridge <- predict(model_ridge, test_dataExpectancy)
+  pred_lasso <- predict(model_lasso, test_dataExpectancy)
+  pred_knn   <- predict(model_knn,   test_dataExpectancy)
+  pred_tree <- predict(tune_tree,test_dataExpectancy)
+  meta_test  <- data.frame(
+    ridge = pred_ridge,
+    lasso = pred_lasso,
+    knn   = pred_knn,
+    tree = pred_tree,
+    Life_expectancy = test_dataExpectancy$Life_expectancy
+  )
+  meta_model <- lm(Life_expectancy ~ ridge + lasso + knn + tree, data = meta_test)
+  pred_stack <- predict(meta_model, meta_test)
+})
+
+cat("Result of the prediction= \n")
+print(head(pred_stack))
+print(head(test_dataExpectancy$Life_expectancy))
+```
+
+
+#### Evaluation of models 
+
+
+```{r,echo=TRUE}
+
+library(Metrics)
+
+actual <- test_dataExpectancy$Life_expectancy
+
+pred_bag   <- predict(model_bag$finalModel,   test_dataExpectancy)
+pred_rf    <- predict(model_rf$finalModel,    test_dataExpectancy)
+pred_ada   <- predict(model_ada$finalModel,   test_dataExpectancy)
+
+get_metrics <- function(actual, predicted, model_name, elapsed_time) {
+  tibble(
+    Model        = model_name,
+    RMSE         = round(rmse(actual, predicted), 4),
+    MAE          = round(mae(actual, predicted),  4),
+    Time_sec     = round(elapsed_time["elapsed"],  2)
+  )
+}
+
+final_table <- bind_rows(
+  get_metrics(actual, pred_bag,   "Bagging",                time_bag),
+  get_metrics(actual, pred_rf,    "Random Forest",          time_rf),
+  get_metrics(actual, pred_ada,   "AdaBoost",               time_ada),
+  get_metrics(actual, pred_ridge, "Ridge",                  time_ridge),
+  get_metrics(actual, pred_lasso, "Lasso",                  time_lasso),
+  get_metrics(actual, pred_knn,   "KNN",                    time_knn),
+  get_metrics(actual, pred_tree,   "tree",                    time_tree),
+  get_metrics(actual, pred_stack, "Stack (Ridge+Lasso+KNN)", time_stack)
+) %>% arrange(RMSE)
+
+print(final_table)
+```
+
+
+
+
+#### Lift plot 
+
+
+We want to evaluate each model using the lift plot to understand the rate of contribution based on the number of observation collected. 
+
+
+- Bagging lift plot 
+
+
+```{r,echo=TRUE}
+# access the gain 
+gain_bag <- gains(test_dataExpectancy$Life_expectancy, pred_bag) # creates the cumulative gain chart
+print(gain_bag)
+
+# Plot Lift chart: Percent cumulative response
+x_bag <- c(0, gain_bag$depth)
+pred.y_bag <- c(0, gain_bag$cume.pct.of.total)
+avg.y_bag <- c(0, gain_bag$depth/100)
+plot(x_bag, pred.y_bag, main = "Cumulative Lift Chart: bagging", xlab = "deciles", 
+     ylab = "Percent cumulative response", type = "l", col = "blue", cex.lab = 1.5)
+lines(x_bag, avg.y_bag, type = "l")
+```
+
+
+- Random Forest lift plot 
+
+
+```{r,echo=TRUE}
+# access the gain 
+gain_rf <- gains(test_dataExpectancy$Life_expectancy, pred_rf) # creates the cumulative gain chart
+print(gain_rf)
+
+# Plot Lift chart: Percent cumulative response
+x_rf <- c(0, gain_rf$depth)
+pred.y_rf <- c(0, gain_rf$cume.pct.of.total)
+avg.y_rf <- c(0, gain_rf$depth/100)
+plot(x_rf, pred.y_rf, main = "Cumulative Lift Chart: Random forest", xlab = "deciles", 
+     ylab = "Percent cumulative response", type = "l", col = "blue", cex.lab = 1.5)
+lines(x_rf, avg.y_rf, type = "l")
+```
+
+- Adaboost lift plot
+
+
+```{r,echo=TRUE}
+# access the gain 
+gain_ada <- gains(test_dataExpectancy$Life_expectancy, pred_ada) # creates the cumulative gain chart
+print(gain_ada)
+
+# Plot Lift chart: Percent cumulative response
+x_ada <- c(0, gain_ada$depth)
+pred.y_ada <- c(0, gain_ada$cume.pct.of.total)
+avg.y_ada <- c(0, gain_ada$depth/100)
+plot(x_ada, pred.y_ada, main = "Cumulative Lift Chart: Adaboost", xlab = "deciles", 
+     ylab = "Percent cumulative response", type = "l", col = "blue", cex.lab = 1.5)
+lines(x_ada, avg.y_ada, type = "l")
+```
+
+- Ridge Regression
+
+
+```{r,echo=TRUE}
+# access the gain 
+gain_ridge <- gains(test_dataExpectancy$Life_expectancy, pred_ridge) # creates the cumulative gain chart
+print(gain_ridge)
+
+# Plot Lift chart: Percent cumulative response
+x_ridge <- c(0, gain_ridge$depth)
+pred.y_ridge <- c(0, gain_ridge$cume.pct.of.total)
+avg.y_ridge <- c(0, gain_ridge$depth/100)
+plot(x_ridge, pred.y_ridge, main = "Cumulative Lift Chart: Ridge Regression", xlab = "deciles", 
+     ylab = "Percent cumulative response", type = "l", col = "blue", cex.lab = 1.5)
+lines(x_ridge, avg.y_ridge, type = "l")
+```
+
+
+
+
+- Lasso Regression
+
+
+```{r,echo=TRUE}
+# access the gain 
+gain_lasso <- gains(test_dataExpectancy$Life_expectancy, pred_lasso) # creates the cumulative gain chart
+print(gain_lasso)
+
+# Plot Lift chart: Percent cumulative response
+x_lasso <- c(0, gain_lasso$depth)
+pred.y_lasso <- c(0, gain_lasso$cume.pct.of.total)
+avg.y_lasso <- c(0, gain_lasso$depth/100)
+plot(x_lasso, pred.y_lasso, main = "Cumulative Lift Chart: Lasso regression", xlab = "deciles", 
+     ylab = "Percent cumulative response", type = "l", col = "blue", cex.lab = 1.5)
+lines(x_lasso, avg.y_lasso, type = "l")
+```
+
+
+
+- Knn algorithm lift plot 
+
+
+```{r,echo=TRUE}
+# access the gain 
+gain_knn <- gains(test_dataExpectancy$Life_expectancy, pred_knn) # creates the cumulative gain chart
+print(gain_knn)
+
+# Plot Lift chart: Percent cumulative response
+x_knn <- c(0, gain_knn$depth)
+pred.y_knn <- c(0, gain_knn$cume.pct.of.total)
+avg.y_knn <- c(0, gain_knn$depth/100)
+plot(x_knn, pred.y_knn, main = "Cumulative Lift Chart: Lasso regression", xlab = "deciles", 
+     ylab = "Percent cumulative response", type = "l", col = "blue", cex.lab = 1.5)
+lines(x_knn, avg.y_knn, type = "l")
+```
+
+
+- tree regression 
+
+```{r,echo=TRUE}
+# access the gain 
+gain_tree <- gains(test_dataExpectancy$Life_expectancy, pred_tree) # creates the cumulative gain chart
+print(gain_tree)
+
+# Plot Lift chart: Percent cumulative response
+x_tree <- c(0, gain_tree$depth)
+pred.y_tree <- c(0, gain_tree$cume.pct.of.total)
+avg.y_tree <- c(0, gain_tree$depth/100)
+plot(x_tree, pred.y_tree, main = "Cumulative Lift Chart: Decision tree", xlab = "deciles", 
+     ylab = "Percent cumulative response", type = "l", col = "blue", cex.lab = 1.5)
+lines(x_tree, avg.y_tree, type = "l")
+```
+
+
+
+- Decision tree 
+
+```{r,echo=TRUE}
+# plot the decision tree 
+prp(tune_tree$finalModel, type = 1, extra = 1, under = TRUE, split.font = 2, varlen = -10)
+```
